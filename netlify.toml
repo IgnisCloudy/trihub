@@ -1,0 +1,13 @@
+[build]
+  functions = "netlify/functions"
+  publish = "."
+
+[[redirects]]
+  from = "/api/strava-callback"
+  to = "/.netlify/functions/strava-callback"
+  status = 200
+
+[[redirects]]
+  from = "/api/strava-activities"
+  to = "/.netlify/functions/strava-activities"
+  status = 200
