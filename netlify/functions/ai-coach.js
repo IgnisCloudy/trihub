@@ -1,98 +1,66 @@
-const CORS_HEADERS = {
+const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Content-Type': 'application/json',
+  'Content-Type': 'application/json'
 };
 
-exports.handler = async (event) => {
-  // Handle preflight CORS request
+exports.handler = async function(event) {
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers: CORS_HEADERS, body: '' };
+    return { statusCode: 200, headers: CORS, body: '' };
   }
 
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Method not allowed' }) };
+    return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  var apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return { statusCode: 500, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Missing ANTHROPIC_API_KEY' }) };
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Missing ANTHROPIC_API_KEY' }) };
   }
 
-  let body;
+  var body;
   try {
     body = JSON.parse(event.body);
-  } catch {
-    return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: 'Invalid JSON body' }) };
+  } catch(e) {
+    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON' }) };
   }
 
-  const { messages, activity, plan, athleteContext } = body;
+  var messages = body.messages || [{ role: 'user', content: 'Give me coaching advice for my triathlon training.' }];
+  var activity = body.activity || null;
+  var plan = body.plan || null;
 
-  const systemPrompt = `You are Coach Claude — a world-class triathlon coach specializing in Ironman 70.3 training. You are coaching Shubham, an Indian athlete training for Ironman 70.3 Goa (Oct/Nov 2027).
+  var activityText = activity ? JSON.stringify(activity) : 'No activity data provided';
+  var planText = plan ? JSON.stringify(plan) : 'Phase 1 - Base Build. Swim 2x, Bike 3x, Run 2-3x, Strength 2x per week.';
 
-ATHLETE PROFILE:
-- Name: Shubham
-- Weight: 75kg
-- Diet: Eggetarian (eggs, dairy, plant protein, whey — no chicken/meat)
-- Bike: Triban RC 100 road bike
-- Background: Cyclist (primary), Swimming (beginner), Running (returning from toe injury June 2026)
-- Strength: 2x/week, leg-focused
-- Target: Ironman 70.3 Goa (Oct/Nov 2027)
-
-CURRENT PHASE:
-${plan ? JSON.stringify(plan, null, 2) : 'Phase 1 — Base Build (17 weeks from June 2026)
-Focus: Build aerobic base, return to run, build swim to 1500m continuous
-Weekly: Swim 2x, Bike 3x, Run 2-3x, Strength 2x'}
-
-LATEST STRAVA ACTIVITY:
-${activity ? JSON.stringify(activity, null, 2) : 'No activity data — give general coaching advice'}
-
-COACHING STYLE:
-- Direct, specific, actionable
-- Reference actual numbers from activity
-- Compare against phase plan targets
-- 2-3 specific improvements for next session
-- Encouraging but honest
-- Under 300 words unless asked for detail
-- Consider Goa heat/humidity for race conditions
-- Watch toe injury on running load
-- Eggetarian nutrition advice
-
-FORMAT:
-- What went well ✓
-- What to improve →
-- Next session target 🎯
-- One pro tip 💡`;
+  var systemPrompt = 'You are Coach Claude, a triathlon coach for Ironman 70.3 training. You are coaching Shubham, an Indian athlete targeting Ironman 70.3 Goa in Oct/Nov 2027. Athlete details: Weight 75kg, eggetarian diet (eggs, dairy, whey protein, no meat), Triban RC 100 bike, returning from toe injury June 2026, beginner swimmer, experienced cyclist, strength training 2x per week. Current phase: ' + planText + '. Latest activity: ' + activityText + '. Give direct, specific, actionable coaching feedback. Format: what went well, what to improve, next session target, one pro tip. Keep under 300 words.';
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    var response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
+        'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 1024,
         system: systemPrompt,
-        messages: messages || [{ role: 'user', content: 'Analyze my latest activity and give me coaching feedback.' }],
-      }),
+        messages: messages
+      })
     });
 
     if (!response.ok) {
-      const err = await response.text();
-      return { statusCode: response.status, headers: CORS_HEADERS, body: JSON.stringify({ error: err }) };
+      var errText = await response.text();
+      return { statusCode: response.status, headers: CORS, body: JSON.stringify({ error: errText }) };
     }
 
-    const data = await response.json();
-    return {
-      statusCode: 200,
-      headers: CORS_HEADERS,
-      body: JSON.stringify({ reply: data.content[0].text }),
-    };
-  } catch (error) {
-    return { statusCode: 500, headers: CORS_HEADERS, body: JSON.stringify({ error: error.message }) };
+    var data = await response.json();
+    var reply = data.content[0].text;
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ reply: reply }) };
+
+  } catch(err) {
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
   }
 };
